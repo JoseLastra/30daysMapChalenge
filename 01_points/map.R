@@ -6,7 +6,7 @@
 
 
 ## Libraries -------
-pacman::p_load(tidyverse, sf, rnaturalearth, ggblend)
+pacman::p_load(tidyverse, sf, rnaturalearth, ggblend, ggspatial)
 
 ## Loading base data ----
 ### world ----
@@ -25,32 +25,47 @@ quakes_sf <- quakes %>%
 
 ## Basemaps -----
 # Set colors
-col_world <- "#9CB4BF"
-col_back <- "#1D201F"
+col_world <- "black"
+col_back <- "black"
 
 # Set theme
 theme_custom <- theme_void() +
-  theme(plot.background = element_rect(fill = col_back, color = NA))
+  theme(
+    plot.background = element_rect(fill = col_back, color = NA),
+    text = element_text(colour = "white", size = 12, family = "mono"),
+    legend.title.position = "top",
+    legend.position = "bottom"
+  )
 
-ggplot() +
+# base plot
+base <- ggplot() +
   # World basemap
   geom_sf(
     data = world,
-    fill = alpha(col_world, .75), color = alpha("#9CB4BF", 0.75)
+    fill = alpha(col_world, .75), linewidth = 0.1, color = alpha("white", 0.5)
   ) +
   geom_point(
     data = quakes_sf,
     aes(x = x, y = y, size = mag, color = mag, alpha = mag)
-  ) |> blend("lighten") +
+  ) +
   scale_size_continuous(
     name = "Magnitude (mww)", trans = "log",
-    range = c(0.5, 4)
+    range = c(1, 8)
   ) +
   scale_alpha_continuous(
     name = "Magnitude (mww)", trans = "log",
-    range = c(0.1, .7)
+    range = c(0.2, .8)
   ) +
-  scale_color_viridis_c(
-    option = "inferno", direction = 1, trans = "log", name = "Magnitude (mww)"
+  labs(
+    title = "Earthquakes above 6.0 mww [1960 - 2024]",
+    caption = "USGS data | @joselastram"
   ) +
+  scale_color_gradient2(
+    low = "#fee8c8", mid = "#fdbb84", high = "#e34a33",
+    midpoint = 7.5, name = "Magnitude (mww)", transform = "log"
+  ) +
+  guides(color = guide_legend(), size = guide_legend()) +
   theme_custom
+
+base
+ggsave(base, filename = "earthquakes_1960_2024.png", width = 12, height = 10, dpi = 300)
