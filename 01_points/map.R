@@ -68,4 +68,4 @@ base <- ggplot() +
   theme_custom
 
 base
-ggsave(base, filename = "earthquakes_1960_2024.png", width = 12, height = 10, dpi = 300)
+ggsave(base, filename = "earthquakes_1960_2024.pdf", width = 12, height = 10, dpi = 300)
