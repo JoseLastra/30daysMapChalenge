@@ -1,5 +1,7 @@
 # Paquetes necesarios
-pacman::p_load(tidyverse, terra, sf, rnaturalearth, rnaturalearthdata, CopernicusMarine)
+pacman::p_load(tidyverse, terra, sf, rnaturalearth, 
+               rnaturalearthdata, CopernicusMarine,
+               legendry)
 
 # Opcional: library(CopernicusMarine) para descarga automática (ver más abajo)
 
@@ -14,40 +16,61 @@ depth_level <- c(0, -0.5)              # superficie
 
 # --- 2. Descargar / abrir datos  
 # Opción A: descarga manual desde CMEMS web y asignar ruta al archivo  
+times <- seq.Date(ymd('2023-09-01'), ymd('2023-12-01'), by = 'month')
 
-currents <- cms_download_subset(destination   = "file.nc",
-                   product       = product_id,
-                   layer         = dataset_id,
-                   variable      = vars,
-                   region        = c(-80,-45, -69,-15),
-                   timerange     = c(time_target, time_target),
-                   verticalrange = depth_level)
+current_list <- lapply(times, function(tiempo){
+  currents <- cms_download_subset(destination   = "file.nc",
+                                  product       = product_id,
+                                  layer         = dataset_id,
+                                  variable      = vars,
+                                  region        = c(-85,20, -33,68),
+                                  timerange     = c(tiempo, tiempo),
+                                  verticalrange = depth_level)
+  
+  
+  
+  curr_df <- currents %>% 
+    st_as_sf() %>% 
+    mutate(across(where(~ inherits(.x, "units")), as.numeric)) %>% 
+    mutate(lon = st_coordinates(st_centroid(.))[,1],
+           lat = st_coordinates(st_centroid(.))[,2],
+           speed = sqrt(uo^2 + vo^2),
+           time_step = tiempo) %>% 
+    st_drop_geometry()
+  
+  curr_df
+})
 
-curr_df <- currents %>% 
-  st_as_sf() %>% 
-  mutate(across(where(~ inherits(.x, "units")), as.numeric)) %>% 
-  mutate(lon = st_coordinates(st_centroid(.))[,1],
-         lat = st_coordinates(st_centroid(.))[,2],
-         speed = sqrt(uo^2 + vo^2)) %>% 
-  st_drop_geometry()
+curr_df <- current_list %>% bind_rows()
   
 # ---- 4. Mapa base + vectores ----
 # Reducimos número de flechas para evitar saturación
-curr_sample <- curr_df |> sample_frac(0.05)
+curr_sample <- curr_df |> sample_frac(0.005)
 
-ggplot() +
+## coastline
+world <- ne_countries(scale = "small", returnclass = "sf")
+
+g <- ggplot() +
   geom_raster(data = curr_df, aes(x = lon, y = lat, fill = speed)) +
-  geom_segment(
-    data = curr_sample,
-    aes(x = lon, y = lat, xend = lon + uo , yend = lat + vo ),
-    arrow = arrow(length = unit(0.15, "cm")), color = "black"
-  ) +
-  scale_fill_viridis_c(name = "Velocidad (m/s)", option = "plasma") +
-  coord_quickmap(xlim = c(-80, -69), ylim = c(-45, -15), expand = FALSE) +
+  geom_sf(data = world, fill = NA, color = "white", linewidth = 0.5) +
+  # geom_segment(
+  #   data = curr_sample,
+  #   aes(x = lon, y = lat, xend = lon + uo , yend = lat + vo,),
+  #   arrow = arrow(length = unit(0.15, "cm")),linewidth = 0.5, color = "black"
+  # ) +
+  scale_fill_viridis_c(name = "Speed (m/s)", option = "turbo") +
+  #scale_color_viridis_c(name = "Speed (m/s)", option = "turbo") +
+  coord_sf(xlim = c(-85, -33), ylim = c(20, 68), expand = FALSE) +
+  facet_wrap(~time_step, nrow = 1) +
   labs(
-    title = "Corrientes superficiales en el ecuador",
-    subtitle = paste("Copernicus Marine Service -", time_target),
-    x = "Longitud", y = "Latitud"
+    title = "Gulf Stream",
+    caption = 'Data: Global Ocean Physics Analysis and Forecast, Copernicus Marine Service',
+    x = "Longitude", y = "Latitude"
   ) +
-  theme_minimal()
+  ggdark::dark_theme_gray(base_family = "Bahnschrift", base_size = 15) +
+  theme(legend.position = 'bottom', legend.title.position = 'top')  
+#g
+
+ggsave(g, filename ='07_accesibility/Gulf_Stream.png', width = 15, height = 8, units = 'in', dpi = 300)
+
 
